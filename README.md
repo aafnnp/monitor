@@ -104,7 +104,14 @@ app.use(MonitorPlugin, {
 ## 文档
 
 - [使用指南](./USAGE.md) - 详细的安装和使用说明
+- [项目结构](./PROJECT_STRUCTURE.md) - 项目架构和技术说明
+- [贡献指南](./CONTRIBUTING.md) - 如何参与项目开发
+- [快速开发](./DEVELOPMENT.md) - 开发者快速上手指南
 - [示例项目](./examples/react-demo) - React 集成示例
+
+## 参与贡献
+
+我们欢迎所有形式的贡献！请查看 [贡献指南](./CONTRIBUTING.md) 了解如何开始。
 
 ## License
 

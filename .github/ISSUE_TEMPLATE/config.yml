@@ -1,0 +1,11 @@
+blank_issues_enabled: true
+contact_links:
+  - name: 📚 使用指南
+    url: https://github.com/YOUR_USERNAME/monitor/blob/main/USAGE.md
+    about: 查看详细的使用文档和示例
+  - name: 💬 讨论区
+    url: https://github.com/YOUR_USERNAME/monitor/discussions
+    about: 提出问题、分享想法或展示你的项目
+  - name: 🤝 贡献指南
+    url: https://github.com/YOUR_USERNAME/monitor/blob/main/CONTRIBUTING.md
+    about: 了解如何参与项目开发
