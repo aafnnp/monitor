@@ -1,0 +1,20 @@
+{
+  "name": "@monitor/cli",
+  "version": "1.0.0",
+  "type": "module",
+  "bin": {
+    "monitor-cli": "./dist/index.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "commander": "^11.1.0",
+    "glob": "^10.3.10"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "typescript": "^5.3.3"
+  }
+}

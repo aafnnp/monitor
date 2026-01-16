@@ -1,0 +1,25 @@
+{
+  "name": "@monitor/sdk-core",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "dependencies": {
+    "@monitor/types": "workspace:*",
+    "rrweb": "^2.0.0-alpha.11"
+  },
+  "devDependencies": {
+    "@types/web": "^0.0.127",
+    "typescript": "^5.3.3"
+  }
+}

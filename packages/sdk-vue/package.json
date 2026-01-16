@@ -1,0 +1,28 @@
+{
+  "name": "@monitor/sdk-vue",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc",
+    "clean": "rm -rf dist *.tsbuildinfo"
+  },
+  "peerDependencies": {
+    "vue": ">=3.0.0"
+  },
+  "dependencies": {
+    "@monitor/sdk-core": "workspace:*",
+    "@monitor/types": "workspace:*"
+  },
+  "devDependencies": {
+    "vue": "^3.4.0",
+    "typescript": "^5.3.3"
+  }
+}
