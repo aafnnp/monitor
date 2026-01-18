@@ -12,6 +12,7 @@ import {
   resolveStackFrame,
   parseStackTrace,
   getSourceSnippet,
+  matchSourceMap,
 } from '../services/SourceMapResolver.js';
 import type { Variables } from '../types.js';
 
@@ -160,12 +161,27 @@ sourcemap.post('/resolve/:errorId', authMiddleware, async (c) => {
     // 解析堆栈
     const frames = parseStackTrace(error.stack);
 
-    // 获取项目的 SourceMap（简单处理：使用最新版本）
-    const maps = await db
-      .select()
-      .from(sourcemaps)
-      .where(eq(sourcemaps.projectId, error.projectId))
-      .orderBy(sourcemaps.createdAt);
+    // 获取版本号（从 context.extra 中）
+    const version = (error.context as any)?.extra?.version;
+
+    // 获取项目的 SourceMap（优先匹配版本号）
+    let maps: Array<{ filePath: string; mapData: string }> = [];
+    if (version) {
+      maps = await db
+        .select()
+        .from(sourcemaps)
+        .where(and(eq(sourcemaps.projectId, error.projectId), eq(sourcemaps.version, version)))
+        .orderBy(sourcemaps.createdAt);
+    }
+
+    // 如果没有找到对应版本的 SourceMap，使用最新的
+    if (maps.length === 0) {
+      maps = await db
+        .select()
+        .from(sourcemaps)
+        .where(eq(sourcemaps.projectId, error.projectId))
+        .orderBy(sourcemaps.createdAt);
+    }
 
     if (maps.length === 0) {
       return c.json({
@@ -179,8 +195,8 @@ sourcemap.post('/resolve/:errorId', authMiddleware, async (c) => {
     const resolvedFrames = [];
 
     for (const frame of frames) {
-      // 查找匹配的 SourceMap
-      const matchingMap = maps.find((m) => frame.fileName?.includes(m.filePath));
+      // 使用智能匹配算法查找对应的 SourceMap
+      const matchingMap = matchSourceMap(frame, maps);
 
       if (matchingMap) {
         const resolved = await resolveStackFrame(frame, matchingMap.mapData);

@@ -177,17 +177,32 @@ function ErrorDetailView({
               <CardTitle className="text-xl">{error.message}</CardTitle>
               <CardDescription className="mt-2">{error.context?.page?.url}</CardDescription>
             </div>
-            <span
-              className={`px-3 py-1 rounded text-sm font-medium ${
-                error.level === 'error'
-                  ? 'bg-red-100 text-red-800'
-                  : error.level === 'warning'
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : 'bg-blue-100 text-blue-800'
-              }`}
-            >
-              {error.level}
-            </span>
+            <div className="flex gap-2">
+              {error.context?.extra?.environment && (
+                <span
+                  className={`px-3 py-1 rounded text-sm font-medium ${
+                    error.context.extra.environment === 'production'
+                      ? 'bg-green-100 text-green-800'
+                      : error.context.extra.environment === 'development'
+                        ? 'bg-blue-100 text-blue-800'
+                        : 'bg-gray-100 text-gray-800'
+                  }`}
+                >
+                  {error.context.extra.environment}
+                </span>
+              )}
+              <span
+                className={`px-3 py-1 rounded text-sm font-medium ${
+                  error.level === 'error'
+                    ? 'bg-red-100 text-red-800'
+                    : error.level === 'warning'
+                      ? 'bg-yellow-100 text-yellow-800'
+                      : 'bg-blue-100 text-blue-800'
+                }`}
+              >
+                {error.level}
+              </span>
+            </div>
           </div>
         </CardHeader>
         <CardContent>
@@ -209,56 +224,135 @@ function ErrorDetailView({
               </div>
             </div>
             <div>
-              <div className="text-muted-foreground">环境</div>
-              <div className="font-semibold">{error.context?.extra?.environment || '-'}</div>
+              <div className="text-muted-foreground">版本</div>
+              <div className="font-semibold">{error.context?.extra?.version || '-'}</div>
             </div>
           </div>
+
+          {/* 开发环境提示 */}
+          {error.context?.extra?.environment === 'development' && (
+            <div className="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg text-sm">
+              <div className="flex items-start gap-2">
+                <span className="text-blue-600 font-semibold">💡 提示：</span>
+                <div className="text-blue-800">
+                  <p>开发环境下，建议直接查看浏览器控制台获取最准确的错误信息和源码位置。</p>
+                  <p className="mt-1">
+                    生产环境需要上传 SourceMap 才能精确定位源码位置，请参考{' '}
+                    <a
+                      href="https://github.com/your-repo/monitor/blob/main/SOURCEMAP_GUIDE.md"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="underline font-medium"
+                    >
+                      SourceMap 使用指南
+                    </a>
+                    。
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
         </CardContent>
       </Card>
 
       {/* 堆栈信息 */}
-      {appFrames.length > 0 && (
+      {(appFrames.length > 0 || error.stack) && (
         <Card>
           <CardHeader>
-            <CardTitle>错误堆栈（应用代码）</CardTitle>
-            <CardDescription>已过滤框架和库的内部代码</CardDescription>
+            <div className="flex items-start justify-between">
+              <div>
+                <CardTitle>错误堆栈</CardTitle>
+                <CardDescription>
+                  {appFrames.length > 0
+                    ? '已解析的应用代码堆栈（已过滤框架和库的内部代码）'
+                    : '原始堆栈信息'}
+                </CardDescription>
+              </div>
+              {error.sourceMapStatus && (
+                <div className="text-xs">
+                  <div className="flex items-center gap-2">
+                    <span
+                      className={`px-2 py-1 rounded ${
+                        error.sourceMapStatus.available
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-gray-100 text-gray-800'
+                      }`}
+                    >
+                      {error.sourceMapStatus.available ? 'SourceMap 可用' : 'SourceMap 不可用'}
+                    </span>
+                  </div>
+                  {error.sourceMapStatus.available && (
+                    <div className="mt-1 text-muted-foreground">
+                      已解析 {error.sourceMapStatus.matchedCount} / {error.sourceMapStatus.totalFrames} 个堆栈帧
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </CardHeader>
           <CardContent>
-            <div className="space-y-4">
-              {appFrames.map((frame: any, index: number) => {
-                const fileName = frame.originalFileName || frame.fileName;
-                const lineNumber = frame.originalLineNumber || frame.lineNumber;
-                const columnNumber = frame.originalColumnNumber || frame.columnNumber;
-                const functionName = frame.functionName || '<anonymous>';
-                const snippetKey = `${frame.originalFileName}:${frame.originalLineNumber}`;
-                const snippet = error.sourceSnippets?.[snippetKey];
+            {appFrames.length > 0 ? (
+              <div className="space-y-4">
+                {appFrames.map((frame: any, index: number) => {
+                  const fileName = frame.originalFileName || frame.fileName;
+                  const lineNumber = frame.originalLineNumber || frame.lineNumber;
+                  const columnNumber = frame.originalColumnNumber || frame.columnNumber;
+                  const functionName = frame.functionName || '<anonymous>';
+                  const snippetKey = `${frame.originalFileName}:${frame.originalLineNumber}`;
+                  const snippet = error.sourceSnippets?.[snippetKey];
+                  const isResolved = !!frame.originalFileName;
 
-                return (
-                  <div key={index} className="border rounded-lg p-4">
-                    <div className="flex items-center gap-2 mb-2">
-                      <span className="text-sm font-mono font-semibold">{functionName}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {fileName}:{lineNumber}:{columnNumber}
-                      </span>
+                  return (
+                    <div key={index} className="border rounded-lg p-4">
+                      <div className="flex items-center gap-2 mb-2">
+                        <span className="text-sm font-mono font-semibold">{functionName}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {fileName}:{lineNumber}:{columnNumber}
+                        </span>
+                        {isResolved && (
+                          <span className="text-xs px-2 py-0.5 bg-green-100 text-green-800 rounded">
+                            已解析
+                          </span>
+                        )}
+                      </div>
+
+                      {snippet && snippet.lines ? (
+                        <pre className="text-xs bg-muted p-3 rounded overflow-x-auto">
+                          {snippet.lines.map((line: any) => (
+                            <div
+                              key={line.number}
+                              className={`${line.highlight ? 'bg-red-100 dark:bg-red-900/30 font-bold' : ''}`}
+                            >
+                              <span className="text-muted-foreground mr-4">{line.number}</span>
+                              {line.content}
+                            </div>
+                          ))}
+                        </pre>
+                      ) : (
+                        <div className="text-xs text-muted-foreground">
+                          {isResolved ? '源码内容不可用' : '未找到 SourceMap，无法显示源码'}
+                        </div>
+                      )}
                     </div>
-
-                    {snippet && (
-                      <pre className="text-xs bg-muted p-3 rounded overflow-x-auto">
-                        {snippet.lines.map((line: any) => (
-                          <div
-                            key={line.number}
-                            className={`${line.highlight ? 'bg-red-100 dark:bg-red-900/30 font-bold' : ''}`}
-                          >
-                            <span className="text-muted-foreground mr-4">{line.number}</span>
-                            {line.content}
-                          </div>
-                        ))}
-                      </pre>
+                  );
+                })}
+              </div>
+            ) : (
+              <div>
+                <pre className="text-xs bg-muted p-3 rounded overflow-x-auto whitespace-pre-wrap">
+                  {error.stack}
+                </pre>
+                <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded text-sm text-yellow-800">
+                  <p className="font-medium">⚠️ 未找到对应的 SourceMap</p>
+                  <p className="mt-1">
+                    请上传 SourceMap 文件以查看源码位置。{' '}
+                    {error.context?.extra?.version && (
+                      <span>当前版本：{error.context.extra.version}</span>
                     )}
-                  </div>
-                );
-              })}
-            </div>
+                  </p>
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

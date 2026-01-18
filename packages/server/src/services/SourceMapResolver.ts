@@ -12,18 +12,23 @@ import type { StackFrame, ResolvedStackFrame } from '@monitor/types';
 function isInApp(fileName?: string): boolean {
   if (!fileName) return false;
 
+  // 如果是源文件路径（包含 src/），直接认为是应用代码
+  if (/\/src\//.test(fileName) || /^src\//.test(fileName)) {
+    return true;
+  }
+
   // 常见的第三方库/框架特征
   const thirdPartyPatterns = [
     /node_modules/,
     /webpack/,
-    /vite/,
+    /vite(?!\.config)/,  // vite 但不包括 vite.config
     /@vite/,
-    /chunk-/,
     /react-dom/,
     /react-refresh/,
     /\.deps\//,
     /__vite__/,
     /\/deps\//,
+    /\/\.vite\//,
   ];
 
   return !thirdPartyPatterns.some((pattern) => pattern.test(fileName));
@@ -73,6 +78,111 @@ export async function resolveStackFrame(
       inApp: isInApp(frame.fileName),
     };
   }
+}
+
+/**
+ * 从文件名中提取基础名称（去除 hash 和 query 参数）
+ * @param fileName - 文件名
+ * @returns 基础文件名或文件路径
+ */
+export function extractBaseFileName(fileName?: string): string | null {
+  if (!fileName) return null;
+
+  try {
+    // 尝试解析为 URL
+    const url = new URL(fileName);
+    let path = url.pathname;
+
+    // 去除开头的斜杠
+    if (path.startsWith('/')) {
+      path = path.substring(1);
+    }
+
+    // 去除 query 参数
+    path = path.split('?')[0];
+
+    // 去除常见的 hash 模式
+    // 例如: assets/index-abc123.js -> assets/index.js
+    path = path.replace(/-[a-zA-Z0-9]{8,}\.(js|css|map)$/, '.$1');
+    path = path.replace(/\.[a-zA-Z0-9]{8,}\.(js|css|map)$/, '.$1');
+
+    return path;
+  } catch {
+    // 如果不是完整 URL，直接处理文件路径
+    let path = fileName;
+
+    // 去除 query 参数
+    path = path.split('?')[0];
+
+    // 去除常见的 hash 模式
+    path = path.replace(/-[a-zA-Z0-9]{8,}\.(js|css|map)$/, '.$1');
+    path = path.replace(/\.[a-zA-Z0-9]{8,}\.(js|css|map)$/, '.$1');
+
+    return path;
+  }
+}
+
+/**
+ * 匹配 SourceMap 文件
+ * @param frame - 堆栈帧
+ * @param sourceMaps - SourceMap 记录列表
+ * @returns 匹配的 SourceMap 或 null
+ */
+export function matchSourceMap(
+  frame: StackFrame,
+  sourceMaps: Array<{ filePath: string; mapData: string }>
+): { filePath: string; mapData: string } | null {
+  if (!frame.fileName) return null;
+
+  const baseFileName = extractBaseFileName(frame.fileName);
+  if (!baseFileName) return null;
+
+  // 1. 精确匹配（完整路径）
+  for (const sourceMap of sourceMaps) {
+    if (sourceMap.filePath === baseFileName) {
+      return sourceMap;
+    }
+  }
+
+  // 2. 路径包含匹配（SourceMap 路径是错误文件路径的一部分）
+  for (const sourceMap of sourceMaps) {
+    if (baseFileName.includes(sourceMap.filePath) || sourceMap.filePath.includes(baseFileName)) {
+      return sourceMap;
+    }
+  }
+
+  // 3. 文件名匹配（只比较文件名，忽略路径）
+  const fileName = baseFileName.split('/').pop();
+  for (const sourceMap of sourceMaps) {
+    const mapFileName = sourceMap.filePath.split('/').pop();
+    if (fileName === mapFileName) {
+      return sourceMap;
+    }
+  }
+
+  // 4. 模糊匹配（去除扩展名和 hash）
+  const fileNameWithoutExt = baseFileName
+    .split('/')
+    .pop()
+    ?.replace(/\.(js|css|tsx|ts|jsx)$/, '');
+
+  for (const sourceMap of sourceMaps) {
+    const mapFileNameWithoutExt = sourceMap.filePath
+      .split('/')
+      .pop()
+      ?.replace(/\.(js|css|tsx|ts|jsx)$/, '');
+
+    if (
+      fileNameWithoutExt &&
+      mapFileNameWithoutExt &&
+      (fileNameWithoutExt.includes(mapFileNameWithoutExt) ||
+        mapFileNameWithoutExt.includes(fileNameWithoutExt))
+    ) {
+      return sourceMap;
+    }
+  }
+
+  return null;
 }
 
 /**

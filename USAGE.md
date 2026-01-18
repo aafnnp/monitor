@@ -134,21 +134,65 @@ function App() {
 }
 ```
 
-## SourceMap 上传
+## SourceMap 管理
 
-构建生产版本后，上传 SourceMap 以便在控制台看到源代码位置：
+为了更好地定位线上错误，系统支持上传 SourceMap 文件进行源码映射。系统会根据版本号自动匹配 SourceMap 并解析错误堆栈，在开发环境也能正确显示源文件位置。
+
+### 方法一：使用 Vite 插件（推荐）
+
+在 Vite 项目中使用插件自动上传 SourceMap：
+
+```typescript
+// vite.config.ts
+import { defineConfig } from 'vite';
+import { monitorSourceMapPlugin } from '@monitor/cli/vite-plugin';
+
+export default defineConfig({
+  plugins: [
+    // 其他插件...
+    monitorSourceMapPlugin({
+      apiKey: 'your-api-key',
+      serverUrl: 'http://localhost:8080',
+      // version: '1.0.0', // 可选，默认从 package.json 读取
+      deleteAfterUpload: true, // 生产环境推荐删除 SourceMap
+      productionOnly: true, // 只在生产环境上传
+    }),
+  ],
+  build: {
+    sourcemap: true, // 必须开启 sourcemap
+  },
+});
+```
+
+### 方法二：使用 CLI 工具
 
 ```bash
-# 构建应用（确保开启 sourcemap）
-npm run build
-
-# 上传 SourceMap
+# 1. 先构建 CLI 工具
 pnpm --filter @monitor/cli build
-node packages/cli/dist/index.js upload-sourcemap \
+
+# 2. 上传 SourceMap（自动从 package.json 读取版本号）
+monitor-cli upload-sourcemap \
+  --api-key your-api-key \
+  --url http://localhost:8080 \
+  --dir ./dist \
+  --delete  # 上传后删除本地 SourceMap（可选）
+
+# 3. 手动指定版本号
+monitor-cli upload-sourcemap \
   --api-key your-api-key \
   --url http://localhost:8080 \
   --version 1.0.0 \
-  --dir dist
+  --dir ./dist
+
+# 4. 自定义匹配模式
+monitor-cli upload-sourcemap \
+  --api-key your-api-key \
+  --url http://localhost:8080 \
+  --dir ./dist \
+  --pattern "**/*.js.map"
+
+# 查看帮助
+monitor-cli upload-sourcemap --help
 ```
 
 或在 package.json 中添加脚本：
@@ -156,10 +200,91 @@ node packages/cli/dist/index.js upload-sourcemap \
 ```json
 {
   "scripts": {
-    "upload-sourcemap": "monitor-cli upload-sourcemap -k $API_KEY -u $SERVER_URL -v $VERSION -d dist"
+    "build": "vite build",
+    "upload-sourcemap": "monitor-cli upload-sourcemap -k $API_KEY -u $SERVER_URL -d dist --delete"
   }
 }
 ```
+
+### 方法三：在 CI/CD 中集成
+
+在 GitHub Actions 或其他 CI/CD 工具中自动上传：
+
+```yaml
+# .github/workflows/deploy.yml
+name: Deploy
+
+on:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Install dependencies
+        run: pnpm install
+
+      - name: Build
+        run: pnpm build
+        env:
+          GENERATE_SOURCEMAP: true
+
+      - name: Upload SourceMap
+        run: |
+          pnpm --filter @monitor/cli build
+          monitor-cli upload-sourcemap \
+            --api-key ${{ secrets.MONITOR_API_KEY }} \
+            --url https://monitor.example.com \
+            --dir ./dist \
+            --delete
+
+      - name: Deploy
+        run: pnpm deploy
+```
+
+### 版本管理
+
+SourceMap 通过版本号进行管理，确保错误能匹配到正确的源码：
+
+1. **自动版本号**：默认从 `package.json` 的 `version` 字段读取
+2. **手动指定**：使用 `--version` 参数或插件的 `version` 选项
+3. **版本匹配**：错误上报时会自动携带版本号（从 SDK 的 `version` 配置），服务端优先使用对应版本的 SourceMap
+
+### 开发环境自动解析
+
+开发环境下（如 Vite 开发服务器），浏览器会自动加载 SourceMap，系统会：
+
+1. 智能识别文件名（去除 hash 和 query 参数，如 `chunk-BISVECJP.js` → `chunk.js`）
+2. 根据文件名匹配正确的 SourceMap
+3. 自动显示源文件的代码位置和上下文
+
+### 注意事项
+
+1. **生产环境安全**：
+   - 使用 `--delete` 或 `deleteAfterUpload: true` 删除已上传的 SourceMap
+   - 不要将 SourceMap 部署到公网可访问的位置
+
+2. **版本一致性**：
+   - 确保上传的 SourceMap 版本与应用版本一致
+   - SDK 初始化时设置 `version` 参数与上传时的版本号保持一致
+   - 建议在 CI/CD 中自动化版本管理
+
+3. **文件大小**：
+   - SourceMap 文件可能较大，建议使用 CDN 加速上传
+   - 数据库存储较大的 SourceMap 可能影响性能，可考虑使用对象存储
+
+### 查看上传的 SourceMap
+
+在管理控制台项目详情页面可以查看已上传的 SourceMap 列表，包括：
+
+- 版本号
+- 文件路径
+- 上传时间
+
+也可以删除不需要的 SourceMap。
 
 ## Docker 部署
 

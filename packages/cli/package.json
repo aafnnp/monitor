@@ -2,8 +2,20 @@
   "name": "@monitor/cli",
   "version": "1.0.0",
   "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
   "bin": {
     "monitor-cli": "./dist/index.js"
+  },
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./vite-plugin": {
+      "import": "./dist/vite-plugin.js",
+      "types": "./dist/vite-plugin.d.ts"
+    }
   },
   "scripts": {
     "build": "tsc",
@@ -15,6 +27,15 @@
   },
   "devDependencies": {
     "@types/node": "^20.11.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vite": "^5.0.0"
+  },
+  "peerDependencies": {
+    "vite": "^4.0.0 || ^5.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   }
 }

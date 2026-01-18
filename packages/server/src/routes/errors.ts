@@ -11,6 +11,7 @@ import {
   resolveStackFrame,
   getSourceSnippet,
   formatStackFrames,
+  matchSourceMap,
 } from '../services/SourceMapResolver.js';
 import type { Variables } from '../types.js';
 import type { ResolvedStackFrame } from '@monitor/types';
@@ -19,6 +20,56 @@ const errorRoutes = new Hono<{ Variables: Variables }>();
 
 // 应用认证中间件
 errorRoutes.use('/*', authMiddleware);
+
+/**
+ * 从开发环境 URL 中提取 SourceMap 数据
+ * @param fileName - 堆栈中的文件名（可能是 URL）
+ * @returns SourceMap JSON 字符串或 null
+ */
+async function fetchSourceMapFromDevUrl(fileName?: string): Promise<string | null> {
+  if (!fileName) return null;
+
+  try {
+    const url = new URL(fileName);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') {
+      return null;
+    }
+
+    const response = await fetch(url.toString());
+    if (!response.ok) return null;
+
+    const jsContent = await response.text();
+    const match = jsContent.match(/\/\/# sourceMappingURL=(.+)$/m);
+    if (!match) return null;
+
+    const sourceMapUrl = match[1].trim();
+
+    // 处理内联 source map
+    if (sourceMapUrl.startsWith('data:application/json;base64,')) {
+      const base64 = sourceMapUrl.replace('data:application/json;base64,', '');
+      return Buffer.from(base64, 'base64').toString('utf-8');
+    }
+
+    if (sourceMapUrl.startsWith('data:application/json;charset=utf-8;base64,')) {
+      const base64 = sourceMapUrl.replace('data:application/json;charset=utf-8;base64,', '');
+      return Buffer.from(base64, 'base64').toString('utf-8');
+    }
+
+    if (sourceMapUrl.startsWith('data:application/json,')) {
+      const data = sourceMapUrl.replace('data:application/json,', '');
+      return decodeURIComponent(data);
+    }
+
+    // 处理外部 source map
+    const resolvedUrl = new URL(sourceMapUrl, url.toString());
+    const mapResponse = await fetch(resolvedUrl.toString());
+    if (!mapResponse.ok) return null;
+
+    return await mapResponse.text();
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 获取错误列表
@@ -69,32 +120,83 @@ errorRoutes.get('/:projectId/:errorId', async (c) => {
     let resolvedFrames: ResolvedStackFrame[] = [];
     let formattedStack: string | undefined;
     let sourceSnippets: Record<string, any> = {};
+    let sourceMapStatus = {
+      available: false,
+      version: (errorRecord.context as any)?.extra?.version,
+      matchedCount: 0,
+      totalFrames: 0,
+    };
+    const environment = (errorRecord.context as any)?.extra?.environment;
 
     if (errorRecord.stack) {
       const frames = parseStackTrace(errorRecord.stack);
+      sourceMapStatus.totalFrames = frames.length;
 
-      // 获取项目的 SourceMap（这里简化处理，实际应该根据文件名匹配）
-      const sourceMaps = await db
-        .select()
-        .from(sourcemaps)
-        .where(eq(sourcemaps.projectId, projectId))
-        .orderBy(desc(sourcemaps.createdAt))
-        .limit(10);
+      // 获取版本号（从 context.extra 中）
+      const version = (errorRecord.context as any)?.extra?.version;
+
+      // 获取项目的 SourceMap（优先匹配版本号）
+      let sourceMaps: Array<{ filePath: string; mapData: string }> = [];
+      if (version) {
+        // 优先使用指定版本的 SourceMap
+        sourceMaps = await db
+          .select()
+          .from(sourcemaps)
+          .where(and(eq(sourcemaps.projectId, projectId), eq(sourcemaps.version, version)))
+          .orderBy(desc(sourcemaps.createdAt));
+      }
+
+      // 如果没有找到对应版本的 SourceMap，使用最新的
+      if (sourceMaps.length === 0) {
+        sourceMaps = await db
+          .select()
+          .from(sourcemaps)
+          .where(eq(sourcemaps.projectId, projectId))
+          .orderBy(desc(sourcemaps.createdAt))
+          .limit(20);
+      }
+
+      sourceMapStatus.available = sourceMaps.length > 0;
 
       // 解析每个堆栈帧
       for (const frame of frames) {
         let resolved = frame as ResolvedStackFrame;
+        let matchedBySourceMap = false;
 
-        // 尝试使用 SourceMap 解析
-        for (const sourceMap of sourceMaps) {
-          if (frame.fileName && frame.fileName.includes(sourceMap.filePath)) {
+        // 使用智能匹配算法找到对应的 SourceMap
+        if (sourceMaps.length > 0) {
+          const matchedMap = matchSourceMap(frame, sourceMaps);
+
+          if (matchedMap) {
             try {
-              resolved = await resolveStackFrame(frame, sourceMap.mapData);
-              break;
+              resolved = await resolveStackFrame(frame, matchedMap.mapData);
+              matchedBySourceMap = !!resolved.originalFileName;
             } catch (err) {
               console.error('解析堆栈帧失败:', err);
             }
           }
+        }
+
+        // 开发环境兜底：从 URL 获取 SourceMap，再解析回源文件
+        if (
+          !resolved.originalSource &&
+          environment === 'development' &&
+          frame.fileName &&
+          /\/src\//.test(frame.fileName)
+        ) {
+          const mapData = await fetchSourceMapFromDevUrl(frame.fileName);
+          if (mapData) {
+            try {
+              resolved = await resolveStackFrame(frame, mapData);
+              matchedBySourceMap = matchedBySourceMap || !!resolved.originalFileName;
+            } catch {
+              // 忽略 URL 解析失败
+            }
+          }
+        }
+
+        if (matchedBySourceMap) {
+          sourceMapStatus.matchedCount++;
         }
 
         resolvedFrames.push(resolved);
@@ -117,6 +219,7 @@ errorRoutes.get('/:projectId/:errorId', async (c) => {
         resolvedFrames,
         formattedStack,
         sourceSnippets,
+        sourceMapStatus,
       },
     });
   } catch (error) {
