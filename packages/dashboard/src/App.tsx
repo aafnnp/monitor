@@ -6,6 +6,8 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { Login } from './pages/Login';
 import { Projects } from './pages/Projects';
 import { ProjectDetail } from './pages/ProjectDetail';
+import { Settings } from './pages/Settings';
+import { Layout } from './components/layout/Layout';
 import { getAuthToken } from './lib/api';
 
 const queryClient = new QueryClient({
@@ -17,11 +19,17 @@ const queryClient = new QueryClient({
   },
 });
 
+/**
+ * 私有路由组件
+ */
 function PrivateRoute({ children }: { children: React.ReactNode }) {
   const token = getAuthToken();
-  return token ? <>{children}</> : <Navigate to="/login" />;
+  return token ? <Layout>{children}</Layout> : <Navigate to="/login" />;
 }
 
+/**
+ * App 根组件
+ */
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -41,6 +49,14 @@ function App() {
             element={
               <PrivateRoute>
                 <ProjectDetail />
+              </PrivateRoute>
+            }
+          />
+          <Route
+            path="/settings"
+            element={
+              <PrivateRoute>
+                <Settings />
               </PrivateRoute>
             }
           />

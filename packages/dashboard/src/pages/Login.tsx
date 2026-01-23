@@ -36,19 +36,22 @@ export function Login() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
-        <CardHeader>
-          <CardTitle>{isLogin ? '登录' : '注册'}</CardTitle>
+        <CardHeader className="space-y-1">
+          <CardTitle className="text-2xl">{isLogin ? '登录' : '注册'}</CardTitle>
           <CardDescription>
             前端监控系统 - {isLogin ? '登录你的账号' : '创建新账号'}
           </CardDescription>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-sm font-medium mb-2">邮箱</label>
+            <div className="space-y-2">
+              <label htmlFor="email" className="text-sm font-medium">
+                邮箱
+              </label>
               <Input
+                id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
@@ -56,9 +59,12 @@ export function Login() {
                 required
               />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-2">密码</label>
+            <div className="space-y-2">
+              <label htmlFor="password" className="text-sm font-medium">
+                密码
+              </label>
               <Input
+                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
@@ -69,7 +75,9 @@ export function Login() {
             </div>
 
             {error && (
-              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded">{error}</div>
+              <div className="text-sm text-destructive bg-destructive/10 p-3 rounded-md">
+                {error}
+              </div>
             )}
 
             <Button type="submit" className="w-full" disabled={loading}>

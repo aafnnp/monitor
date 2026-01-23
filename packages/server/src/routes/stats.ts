@@ -197,6 +197,7 @@ stats.get('/sessions/:projectId', async (c) => {
         sessionId: sessions.sessionId,
         projectId: sessions.projectId,
         userInfo: sessions.userInfo,
+        duration: sessions.duration,
         eventCount: sql<number>`json_array_length(${sessions.events})`,
         createdAt: sessions.createdAt,
       })
@@ -299,6 +300,45 @@ stats.get('/errors/:projectId/:errorId', async (c) => {
   } catch (error) {
     console.error('获取错误详情失败:', error);
     return c.json({ error: '获取错误详情失败' }, 500);
+  }
+});
+
+/**
+ * 获取单个性能数据详情
+ * GET /performance/:projectId/:metricId
+ */
+stats.get('/performance/:projectId/:metricId', async (c) => {
+  const projectId = c.req.param('projectId');
+  const metricId = c.req.param('metricId');
+  const auth = c.get('auth');
+
+  try {
+    // 检查权限
+    const [membership] = await db
+      .select()
+      .from(projectMembers)
+      .where(and(eq(projectMembers.projectId, projectId), eq(projectMembers.userId, auth.userId)))
+      .limit(1);
+
+    if (!membership) {
+      return c.json({ error: '无权访问该项目' }, 403);
+    }
+
+    // 查询性能数据详情
+    const [metric] = await db
+      .select()
+      .from(performanceMetrics)
+      .where(and(eq(performanceMetrics.projectId, projectId), eq(performanceMetrics.id, metricId)))
+      .limit(1);
+
+    if (!metric) {
+      return c.json({ error: '性能数据不存在' }, 404);
+    }
+
+    return c.json({ data: metric });
+  } catch (error) {
+    console.error('获取性能数据详情失败:', error);
+    return c.json({ error: '获取性能数据详情失败' }, 500);
   }
 });
 

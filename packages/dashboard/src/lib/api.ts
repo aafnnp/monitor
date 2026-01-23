@@ -207,6 +207,13 @@ export const performanceApi = {
   },
 
   /**
+   * 获取性能数据详情
+   */
+  get: (projectId: string, metricId: string): Promise<any> => {
+    return request(`/api/performance/${projectId}/${metricId}`);
+  },
+
+  /**
    * 获取性能统计
    */
   stats: (projectId: string): Promise<any> => {
@@ -228,8 +235,8 @@ export const sessionApi = {
   /**
    * 获取 Session 详情
    */
-  get: (id: string): Promise<any> => {
-    return request(`/api/sessions/${id}`);
+  get: (projectId: string, sessionId: string): Promise<any> => {
+    return request(`/api/sessions/${projectId}/${sessionId}`);
   },
 
   /**
